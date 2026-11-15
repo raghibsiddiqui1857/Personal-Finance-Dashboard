@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Personal Finance Dashboard</title>
+<style>
+:root{--bg:#f4f5fb;--card:#fff;--tx:#1e1b4b;--mut:#6b7280;--pri:#6366f1;--ok:#22c55e;--bad:#ef4444;--warn:#f59e0b;--bd:#e5e7eb}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1020;--card:#1a1b32;--tx:#e5e7ff;--mut:#9ca3af;--bd:#2c2e4f}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{padding:20px 5vw;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+h1{margin:0;font-size:1.4rem}main{padding:0 5vw 40px;display:grid;gap:18px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.kpi small{color:var(--mut)}.kpi b{display:block;font-size:1.6rem}
+.grid2{display:grid;grid-template-columns:2fr 1fr;gap:18px}@media(max-width:850px){.grid2{grid-template-columns:1fr}}
+img{max-width:100%;height:auto;border-radius:8px;background:#fff}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+input,select,button{padding:8px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font:inherit}
+button{background:var(--pri);color:#fff;border:0;cursor:pointer}button.ghost{background:transparent;color:var(--bad);padding:2px 8px}
+button.sec{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--bd)}th{color:var(--mut);font-weight:600;font-size:.8rem}
+.income{color:var(--ok)}.expense{color:var(--bad)}.bar{height:8px;border-radius:6px;background:var(--bd);overflow:hidden}.bar i{display:block;height:100%;background:var(--ok)}
+.bar i.warn{background:var(--warn)}.bar i.over{background:var(--bad)}
+.flash{padding:10px 14px;border-radius:10px;background:#dcfce7;color:#166534}.flash.error{background:#fee2e2;color:#991b1b}
+.pager{display:flex;gap:10px;align-items:center;margin-top:12px}.pager a{color:var(--pri)}
+.ai{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}.ai small{color:#e0e7ff}
+</style></head><body>
+<header><h1>💰 AI Personal Finance Dashboard</h1>
+<div class="row">
+<form method="post" action="/seed"><button class="sec">Load demo data</button></form>
+<a href="/export"><button class="sec" type="button">Export CSV</button></a></div></header>
+<main>
+{% with msgs = get_flashed_messages(with_categories=true) %}{% for c,m in msgs %}<div class="flash {{c}}">{{m}}</div>{% endfor %}{% endwith %}
+
+<section class="kpis">
+ <div class="card kpi"><small>Total income</small><b class="income">{{ d.totals.income|money }}</b></div>
+ <div class="card kpi"><small>Total expenses</small><b class="expense">{{ d.totals.expense|money }}</b></div>
+ <div class="card kpi"><small>Net savings</small><b>{{ d.totals.savings|money }}</b></div>
+ <div class="card kpi"><small>Savings rate</small><b>{{ '%.1f'|format(d.totals.rate) }}%</b></div>
+ {% if d.forecast %}<div class="card kpi ai"><small>🤖 Predicted savings · {{ d.forecast.month }}</small>
+  <b>{{ d.forecast.value|money }}</b><small>±{{ d.forecast.std|money }} · trend {{ d.forecast.trend }}</small></div>{% endif %}
+</section>
+
+<section class="grid2">
+ <div class="card"><img src="data:image/png;base64,{{ d.trend }}" alt="trend"></div>
+ <div class="card"><img src="data:image/png;base64,{{ d.pie }}" alt="categories"></div>
+</section>
+<section class="card"><img src="data:image/png;base64,{{ d.daily }}" alt="daily"></section>
+
+<section class="grid2">
+ <div class="card"><h3 style="margin-top:0">Add transaction</h3>
+  <form class="row" method="post" action="/add">
+   <input type="date" name="date" value="{{ today }}" required>
+   <select name="type"><option>expense</option><option>income</option></select>
+   <input name="category" list="cats" placeholder="Category" required>
+   <datalist id="cats">{% for c in categories %}<option value="{{c}}">{% endfor %}</datalist>
+   <input type="number" step="0.01" min="0.01" name="amount" placeholder="Amount" required>
+   <input name="note" placeholder="Note (optional)"><button>Add</button></form>
+  <form class="row" method="post" action="/import" enctype="multipart/form-data" style="margin-top:12px">
+   <input type="file" name="file" accept=".csv" required><button class="sec">Import CSV</button></form>
+  <small style="color:var(--mut)">CSV columns: date,type,category,amount,note</small>
+ </div>
+ <div class="card"><h3 style="margin-top:0">Budgets (this month)</h3>
+  {% for b in d.budgets %}<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between">
+   <span>{{ b.category }}{% if b.over %} 🚨{% elif b.warn %} ⚠️{% endif %}</span><small>{{ b.spent|money }} / {{ b.limit|money }}</small></div>
+   <div class="bar"><i class="{{ 'over' if b.over else ('warn' if b.warn else '') }}" style="width:{{ b.pct }}%"></i></div></div>
+  {% else %}<small>No budgets yet.</small>{% endfor %}
+  <form class="row" method="post" action="/budget"><input name="category" placeholder="Category" required style="width:110px">
+   <input type="number" name="monthly_limit" min="1" placeholder="Limit" required style="width:90px"><button>Set</button></form>
+ </div>
+</section>
+
+{% if d.cat_fc %}<section class="card"><h3 style="margin-top:0">🔮 Expected spend next month (3-month average)</h3>
+ <div class="row">{% for c,v in d.cat_fc.items() %}
+ <span class="card" style="padding:8px 12px">{{ c }}: <b>{{ v|money }}</b></span>{% endfor %}</div></section>{% endif %}
+
+<section class="card"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
+ <h3 style="margin:0">Transactions</h3>
+ <form class="row" method="get"><input name="q" value="{{ q }}" placeholder="Search…"><button class="sec">Search</button></form></div>
+ <div style="overflow-x:auto"><table><tr><th>Date</th><th>Type</th><th>Category</th><th>Note</th><th>Amount</th><th></th></tr>
+ {% for r in rows %}<tr><td>{{ r.date }}</td><td class="{{ r.type }}">{{ r.type }}</td><td>{{ r.category }}</td><td>{{ r.note }}</td>
+  <td class="{{ r.type }}">{{ '-' if r.type=='expense' }}{{ r.amount|money }}</td>
+  <td><form method="post" action="/delete/{{ r.id }}"><button class="ghost" title="Delete">✕</button></form></td></tr>
+ {% else %}<tr><td colspan="6">No transactions. Add one or load demo data.</td></tr>{% endfor %}</table></div>
+ <div class="pager">{% if page>1 %}<a href="?page={{page-1}}&q={{q}}">← Prev</a>{% endif %}
+ <span>Page {{page}} / {{pages}}</span>{% if page<pages %}<a href="?page={{page+1}}&q={{q}}">Next →</a>{% endif %}</div>
+</section>
+</main></body></html>
